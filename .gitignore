@@ -43,3 +43,17 @@ sklearn-layer/
 
 # Deployment zips
 *.zip
+
+# Lambda test artifacts
+response.json
+payload.json
+backfill.json
+
+# S3 policies
+s3policy.json
+
+# sklearn Lambda layer
+sklearn-layer/
+
+# Deployment zips
+*.zip

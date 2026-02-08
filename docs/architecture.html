@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NBA Predictor — System Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #06080d;
+    --surface: #0d1117;
+    --surface2: #151b26;
+    --border: #1e2a3a;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --green: #00e68a;
+    --green-dim: rgba(0, 230, 138, 0.1);
+    --blue: #38bdf8;
+    --blue-dim: rgba(56, 189, 248, 0.1);
+    --orange: #fb923c;
+    --orange-dim: rgba(251, 146, 60, 0.1);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167, 139, 250, 0.1);
+    --red: #f87171;
+    --red-dim: rgba(248, 113, 113, 0.1);
+    --yellow: #fbbf24;
+    --yellow-dim: rgba(251, 191, 36, 0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(ellipse at 20% 20%, rgba(0, 230, 138, 0.03) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(56, 189, 248, 0.03) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(167, 139, 250, 0.02) 0%, transparent 50%);
+    animation: ambientDrift 20s ease-in-out infinite alternate;
+    z-index: 0;
+  }
+
+  @keyframes ambientDrift {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    100% { transform: translate(-2%, -2%) rotate(3deg); }
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 60px;
+  }
+
+  .header-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    background: var(--green-dim);
+    border: 1px solid rgba(0, 230, 138, 0.2);
+    border-radius: 100px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+  }
+
+  .header h1 {
+    font-size: clamp(32px, 5vw, 56px);
+    font-weight: 700;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #fff 0%, var(--blue) 50%, var(--green) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .header p {
+    font-size: 16px;
+    color: var(--text-dim);
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* Tech stack badges */
+  .tech-stack {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  .tech-badge {
+    padding: 4px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* Architecture SVG */
+  .architecture {
+    margin: 0 auto 60px;
+    width: 100%;
+  }
+
+  .arch-svg {
+    width: 100%;
+    height: auto;
+  }
+
+  /* Flow section */
+  .flow-section {
+    margin-bottom: 60px;
+  }
+
+  .section-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 32px;
+    padding-left: 16px;
+    border-left: 3px solid var(--green);
+  }
+
+  /* Pipeline steps */
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 60px;
+  }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s, border-color 0.3s;
+  }
+
+  .step:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255,255,255,0.1);
+  }
+
+  .step::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .step:nth-child(1)::before { background: var(--blue); }
+  .step:nth-child(2)::before { background: var(--green); }
+  .step:nth-child(3)::before { background: var(--orange); }
+  .step:nth-child(4)::before { background: var(--purple); }
+  .step:nth-child(5)::before { background: var(--yellow); }
+  .step:nth-child(6)::before { background: var(--red); }
+
+  .step-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  .step-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+  }
+
+  .step h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .step p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .step-tech {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .step-tech span {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: var(--text-dim);
+  }
+
+  /* Detail cards */
+  .details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+    margin-bottom: 60px;
+  }
+
+  .detail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+  }
+
+  .detail-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .detail-card h3 .icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+
+  .detail-list {
+    list-style: none;
+  }
+
+  .detail-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    display: flex;
+    gap: 8px;
+  }
+
+  .detail-list li:last-child { border-bottom: none; }
+
+  .detail-list li .label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    min-width: 80px;
+    flex-shrink: 0;
+  }
+
+  /* Prediction model */
+  .model-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px;
+    margin-bottom: 60px;
+  }
+
+  .model-section h2 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .formula-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    line-height: 2;
+    overflow-x: auto;
+  }
+
+  .formula-block .comment {
+    color: var(--text-dim);
+  }
+
+  .formula-block .keyword {
+    color: var(--orange);
+  }
+
+  .formula-block .value {
+    color: var(--green);
+  }
+
+  .formula-block .fn {
+    color: var(--blue);
+  }
+
+  /* Architecture diagram - SVG */
+  .diagram-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px;
+    margin-bottom: 60px;
+    overflow-x: auto;
+  }
+
+  .diagram-container h2 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 28px;
+  }
+
+  .diagram-wrapper {
+    min-width: 900px;
+    padding: 20px 0;
+  }
+
+  /* Animated connection lines */
+  @keyframes flowPulse {
+    0% { stroke-dashoffset: 20; }
+    100% { stroke-dashoffset: 0; }
+  }
+
+  .flow-line {
+    stroke-dasharray: 8, 4;
+    animation: flowPulse 1.5s linear infinite;
+  }
+
+  /* Node styles in SVG */
+  .node-box {
+    rx: 12;
+    ry: 12;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .pipeline { grid-template-columns: 1fr; }
+    .details-grid { grid-template-columns: 1fr; }
+    .diagram-wrapper { min-width: 700px; }
+  }
+
+  /* Cost section */
+  .cost-banner {
+    background: linear-gradient(135deg, var(--green-dim), var(--blue-dim));
+    border: 1px solid rgba(0, 230, 138, 0.15);
+    border-radius: 16px;
+    padding: 28px;
+    text-align: center;
+    margin-bottom: 60px;
+  }
+
+  .cost-banner h3 {
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  .cost-banner p {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .cost-items {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 20px;
+  }
+
+  .cost-item {
+    text-align: center;
+  }
+
+  .cost-item .amount {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  .cost-item .label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">System Architecture</div>
+    <h1>NBA Over/Under<br>Prediction Engine</h1>
+    <p>A serverless sports analytics platform that analyzes player stats, generates betting predictions with live odds, and delivers picks via dashboard and Discord.</p>
+    <div class="tech-stack">
+      <span class="tech-badge">AWS Lambda</span>
+      <span class="tech-badge">DynamoDB</span>
+      <span class="tech-badge">API Gateway</span>
+      <span class="tech-badge">S3</span>
+      <span class="tech-badge">EventBridge</span>
+      <span class="tech-badge">CloudFormation</span>
+      <span class="tech-badge">Python 3.11</span>
+      <span class="tech-badge">SAM</span>
+    </div>
+  </div>
+
+  <!-- Visual Architecture Diagram -->
+  <div class="diagram-container">
+    <h2>⚡ Architecture Diagram</h2>
+    <div class="diagram-wrapper">
+      <svg viewBox="0 0 1100 620" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+        <defs>
+          <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#00e68a" />
+          </marker>
+          <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#38bdf8" />
+          </marker>
+          <marker id="arrowOrange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#fb923c" />
+          </marker>
+          <marker id="arrowPurple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#a78bfa" />
+          </marker>
+          <marker id="arrowYellow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#fbbf24" />
+          </marker>
+          <marker id="arrowRed" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#f87171" />
+          </marker>
+        </defs>
+
+        <!-- Background grid dots -->
+        <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+          <circle cx="2" cy="2" r="0.5" fill="rgba(255,255,255,0.05)"/>
+        </pattern>
+        <rect width="1100" height="620" fill="url(#dots)"/>
+
+        <!-- LAYER LABELS -->
+        <text x="20" y="30" font-family="Space Mono, monospace" font-size="10" fill="#64748b" letter-spacing="2">DATA SOURCES</text>
+        <text x="20" y="200" font-family="Space Mono, monospace" font-size="10" fill="#64748b" letter-spacing="2">EVENT-DRIVEN PIPELINE</text>
+        <text x="20" y="400" font-family="Space Mono, monospace" font-size="10" fill="#64748b" letter-spacing="2">STORAGE LAYER</text>
+        <text x="20" y="545" font-family="Space Mono, monospace" font-size="10" fill="#64748b" letter-spacing="2">DELIVERY</text>
+
+        <!-- ========== DATA SOURCES ========== -->
+        <!-- balldontlie API -->
+        <rect x="80" y="50" width="180" height="70" rx="12" fill="#0d1117" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="170" y="78" text-anchor="middle" font-family="Sora" font-size="13" font-weight="600" fill="#e2e8f0">🏀 balldontlie API</text>
+        <text x="170" y="100" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">NBA Stats & Scores</text>
+
+        <!-- The Odds API -->
+        <rect x="340" y="50" width="180" height="70" rx="12" fill="#0d1117" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="430" y="78" text-anchor="middle" font-family="Sora" font-size="13" font-weight="600" fill="#e2e8f0">📊 The Odds API</text>
+        <text x="430" y="100" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">Live Betting Lines</text>
+
+        <!-- EventBridge -->
+        <rect x="660" y="50" width="180" height="70" rx="12" fill="#0d1117" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="750" y="78" text-anchor="middle" font-family="Sora" font-size="13" font-weight="600" fill="#e2e8f0">⏰ EventBridge</text>
+        <text x="750" y="100" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">Daily Cron Schedules</text>
+
+        <!-- ========== LAMBDA FUNCTIONS ========== -->
+        <!-- Fetch Data -->
+        <rect x="40" y="220" width="200" height="80" rx="12" fill="#0d1117" stroke="#38bdf8" stroke-width="1.5"/>
+        <rect x="40" y="220" width="200" height="4" rx="2" fill="#38bdf8"/>
+        <text x="140" y="252" text-anchor="middle" font-family="Sora" font-size="13" font-weight="600" fill="#e2e8f0">λ FetchData</text>
+        <text x="140" y="272" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">10:00 UTC Daily</text>
+        <text x="140" y="288" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#38bdf8">Pull 7 days of games</text>
+
+        <!-- Process Stats -->
+        <rect x="290" y="220" width="200" height="80" rx="12" fill="#0d1117" stroke="#00e68a" stroke-width="1.5"/>
+        <rect x="290" y="220" width="200" height="4" rx="2" fill="#00e68a"/>
+        <text x="390" y="252" text-anchor="middle" font-family="Sora" font-size="13" font-weight="600" fill="#e2e8f0">λ ProcessStats</text>
+        <text x="390" y="272" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">11:00 UTC Daily</text>
+        <text x="390" y="288" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#00e68a">Rolling avg + trends</text>
+
+        <!-- Predict -->
+        <rect x="540" y="220" width="200" height="80" rx="12" fill="#0d1117" stroke="#fb923c" stroke-width="1.5"/>
+        <rect x="540" y="220" width="200" height="4" rx="2" fill="#fb923c"/>
+        <text x="640" y="252" text-anchor="middle" font-family="Sora" font-size="13" font-weight="600" fill="#e2e8f0">λ Predict</text>
+        <text x="640" y="272" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">12:00 UTC Daily</text>
+        <text x="640" y="288" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#fb923c">Generate O/U picks</text>
+
+        <!-- Verify Results -->
+        <rect x="790" y="220" width="200" height="80" rx="12" fill="#0d1117" stroke="#fbbf24" stroke-width="1.5"/>
+        <rect x="790" y="220" width="200" height="4" rx="2" fill="#fbbf24"/>
+        <text x="890" y="252" text-anchor="middle" font-family="Sora" font-size="13" font-weight="600" fill="#e2e8f0">λ VerifyResults</text>
+        <text x="890" y="272" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">14:00 UTC Daily</text>
+        <text x="890" y="288" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#fbbf24">Track accuracy</text>
+
+        <!-- ========== FLOW ARROWS (Data Sources → Lambdas) ========== -->
+        <!-- balldontlie → FetchData -->
+        <path d="M170,120 L140,215" stroke="#38bdf8" stroke-width="1.5" fill="none" marker-end="url(#arrowBlue)" class="flow-line"/>
+        <!-- balldontlie → Predict (for today's games) -->
+        <path d="M210,120 L600,215" stroke="#38bdf8" stroke-width="1" fill="none" marker-end="url(#arrowBlue)" class="flow-line" stroke-dasharray="4,4" opacity="0.4"/>
+        <!-- Odds API → Predict -->
+        <path d="M430,120 L640,215" stroke="#fb923c" stroke-width="1.5" fill="none" marker-end="url(#arrowOrange)" class="flow-line"/>
+        <!-- EventBridge → all lambdas -->
+        <path d="M700,120 L140,215" stroke="#a78bfa" stroke-width="1" fill="none" marker-end="url(#arrowPurple)" class="flow-line" opacity="0.5"/>
+        <path d="M720,120 L390,215" stroke="#a78bfa" stroke-width="1" fill="none" marker-end="url(#arrowPurple)" class="flow-line" opacity="0.5"/>
+        <path d="M750,120 L640,215" stroke="#a78bfa" stroke-width="1" fill="none" marker-end="url(#arrowPurple)" class="flow-line" opacity="0.5"/>
+        <path d="M790,120 L890,215" stroke="#a78bfa" stroke-width="1" fill="none" marker-end="url(#arrowPurple)" class="flow-line" opacity="0.5"/>
+
+        <!-- ========== FLOW ARROWS (Lambda → Lambda) ========== -->
+        <path d="M240,260 L285,260" stroke="#00e68a" stroke-width="2" fill="none" marker-end="url(#arrowGreen)" class="flow-line"/>
+        <path d="M490,260 L535,260" stroke="#fb923c" stroke-width="2" fill="none" marker-end="url(#arrowOrange)" class="flow-line"/>
+
+        <!-- ========== STORAGE ========== -->
+        <!-- S3 Raw Data -->
+        <rect x="60" y="420" width="160" height="65" rx="12" fill="#0d1117" stroke="#38bdf8" stroke-width="1"/>
+        <text x="140" y="448" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">🪣 S3 Bucket</text>
+        <text x="140" y="468" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">Raw JSON Data</text>
+
+        <!-- DynamoDB Stats -->
+        <rect x="270" y="420" width="160" height="65" rx="12" fill="#0d1117" stroke="#00e68a" stroke-width="1"/>
+        <text x="350" y="448" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">📋 Stats Table</text>
+        <text x="350" y="468" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">DynamoDB + GSI</text>
+
+        <!-- DynamoDB Predictions -->
+        <rect x="480" y="420" width="160" height="65" rx="12" fill="#0d1117" stroke="#fb923c" stroke-width="1"/>
+        <text x="560" y="448" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">🎯 Predictions</text>
+        <text x="560" y="468" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">DynamoDB + TTL</text>
+
+        <!-- DynamoDB Results -->
+        <rect x="690" y="420" width="160" height="65" rx="12" fill="#0d1117" stroke="#fbbf24" stroke-width="1"/>
+        <text x="770" y="448" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">📊 Results</text>
+        <text x="770" y="468" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">DynamoDB</text>
+
+        <!-- ========== FLOW ARROWS (Lambdas → Storage) ========== -->
+        <path d="M120,300 L130,415" stroke="#38bdf8" stroke-width="1.5" fill="none" marker-end="url(#arrowBlue)" class="flow-line"/>
+        <path d="M160,300 L340,415" stroke="#38bdf8" stroke-width="1" fill="none" marker-end="url(#arrowBlue)" class="flow-line" opacity="0.5"/>
+        <path d="M390,300 L355,415" stroke="#00e68a" stroke-width="1.5" fill="none" marker-end="url(#arrowGreen)" class="flow-line"/>
+        <path d="M640,300 L565,415" stroke="#fb923c" stroke-width="1.5" fill="none" marker-end="url(#arrowOrange)" class="flow-line"/>
+        <path d="M890,300 L780,415" stroke="#fbbf24" stroke-width="1.5" fill="none" marker-end="url(#arrowYellow)" class="flow-line"/>
+
+        <!-- ========== DELIVERY LAYER ========== -->
+        <!-- API Gateway -->
+        <rect x="300" y="560" width="160" height="50" rx="12" fill="#0d1117" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="380" y="585" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">🌐 API Gateway</text>
+        <text x="380" y="600" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">REST API</text>
+
+        <!-- API Lambda -->
+        <rect x="900" y="420" width="160" height="65" rx="12" fill="#0d1117" stroke="#a78bfa" stroke-width="1"/>
+        <text x="980" y="448" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">λ API Handler</text>
+        <text x="980" y="468" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">Read-only endpoints</text>
+
+        <!-- Dashboard -->
+        <rect x="100" y="560" width="150" height="50" rx="12" fill="#0d1117" stroke="#00e68a" stroke-width="1.5"/>
+        <text x="175" y="585" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">📱 Dashboard</text>
+        <text x="175" y="600" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">S3 + CloudFront</text>
+
+        <!-- Discord -->
+        <rect x="510" y="560" width="150" height="50" rx="12" fill="#0d1117" stroke="#7289da" stroke-width="1.5"/>
+        <text x="585" y="585" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">💬 Discord</text>
+        <text x="585" y="600" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">Webhook Notifs</text>
+
+        <!-- Lambda Notify -->
+        <rect x="540" y="330" width="160" height="50" rx="12" fill="#0d1117" stroke="#7289da" stroke-width="1"/>
+        <text x="620" y="355" text-anchor="middle" font-family="Sora" font-size="12" font-weight="600" fill="#e2e8f0">λ DiscordNotify</text>
+        <text x="620" y="370" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#64748b">12:15 UTC Daily</text>
+
+        <!-- ========== DELIVERY ARROWS ========== -->
+        <!-- API Gateway → Dashboard -->
+        <path d="M300,585 L255,585" stroke="#00e68a" stroke-width="1.5" fill="none" marker-end="url(#arrowGreen)" class="flow-line"/>
+        <!-- Predictions → API Gateway -->
+        <path d="M560,485 L400,555" stroke="#a78bfa" stroke-width="1" fill="none" marker-end="url(#arrowPurple)" class="flow-line"/>
+        <!-- API Lambda → API Gateway -->
+        <path d="M950,485 L420,560" stroke="#a78bfa" stroke-width="1" fill="none" marker-end="url(#arrowPurple)" class="flow-line" opacity="0.5"/>
+        <!-- Predict → Discord Notify -->
+        <path d="M640,300 L625,325" stroke="#7289da" stroke-width="1.5" fill="none" marker-end="url(#arrowBlue)" class="flow-line"/>
+        <!-- Discord Notify → Discord -->
+        <path d="M600,380 L590,555" stroke="#7289da" stroke-width="1.5" fill="none" marker-end="url(#arrowBlue)" class="flow-line"/>
+
+      </svg>
+    </div>
+  </div>
+
+  <!-- Pipeline Steps -->
+  <div class="flow-section">
+    <h2 class="section-title">Daily Pipeline</h2>
+    <div class="pipeline">
+      <div class="step">
+        <div class="step-time">10:00 AM UTC</div>
+        <div class="step-icon">📡</div>
+        <h3>Fetch Data</h3>
+        <p>Pulls the last 7 days of NBA box scores from the balldontlie API. Stores raw JSON in S3 and processed player game records in DynamoDB with composite keys for flexible querying.</p>
+        <div class="step-tech">
+          <span>Lambda</span>
+          <span>balldontlie API</span>
+          <span>S3</span>
+          <span>DynamoDB</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-time">11:00 AM UTC</div>
+        <div class="step-icon">📐</div>
+        <h3>Process Stats</h3>
+        <p>Calculates rolling averages (5/10/20 game windows), performance trends, and consistency scores for every active player. Uses GSI queries to find players with recent games.</p>
+        <div class="step-tech">
+          <span>Lambda</span>
+          <span>DynamoDB GSI</span>
+          <span>Statistical Analysis</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-time">12:00 PM UTC</div>
+        <div class="step-icon">🎯</div>
+        <h3>Generate Predictions</h3>
+        <p>Fetches live player prop lines from The Odds API. Applies weighted prediction model to generate over/under recommendations with edge percentages and confidence scores.</p>
+        <div class="step-tech">
+          <span>Lambda</span>
+          <span>The Odds API</span>
+          <span>Prediction Model</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-time">12:15 PM UTC</div>
+        <div class="step-icon">💬</div>
+        <h3>Discord Alerts</h3>
+        <p>Sends the top 15 high-confidence picks to a Discord channel via webhook. Includes player, stat, line, edge, and recommendation. Shows rolling 7-day accuracy in the footer.</p>
+        <div class="step-tech">
+          <span>Lambda</span>
+          <span>Discord Webhook</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-time">02:00 PM UTC</div>
+        <div class="step-icon">✅</div>
+        <h3>Verify Results</h3>
+        <p>After games complete, compares yesterday's predictions against actual box scores. Calculates accuracy by confidence level and stat type. Stores results for the dashboard.</p>
+        <div class="step-tech">
+          <span>Lambda</span>
+          <span>DynamoDB</span>
+          <span>Accuracy Tracking</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-time">Always On</div>
+        <div class="step-icon">🌐</div>
+        <h3>API + Dashboard</h3>
+        <p>REST API serves predictions, player stats, and accuracy data to the frontend dashboard. Single-page app hosted on S3 with real-time filtering and player detail modals.</p>
+        <div class="step-tech">
+          <span>API Gateway</span>
+          <span>Lambda</span>
+          <span>S3</span>
+          <span>HTML/CSS/JS</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prediction Model -->
+  <div class="model-section">
+    <h2>🧠 Prediction Model</h2>
+    <div class="formula-block">
+      <span class="comment">// Weighted rolling average</span><br>
+      <span class="fn">prediction</span> = (<span class="value">last_5_avg</span> × <span class="keyword">0.45</span>) + (<span class="value">last_10_avg</span> × <span class="keyword">0.30</span>) + (<span class="value">last_20_avg</span> × <span class="keyword">0.25</span>)<br><br>
+      <span class="comment">// Trend adjustment</span><br>
+      <span class="fn">trend_adj</span> = prediction × (<span class="value">trend_pct</span> / 100) × <span class="keyword">0.05</span><br><br>
+      <span class="comment">// Edge = how far our prediction is from the betting line</span><br>
+      <span class="fn">edge</span> = ((<span class="value">prediction</span> - <span class="value">line</span>) / <span class="value">line</span>) × 100<br><br>
+      <span class="comment">// Decision thresholds</span><br>
+      <span class="keyword">if</span> edge &gt; <span class="keyword">8%</span> → <span style="color:#00e68a">▲ OVER</span><br>
+      <span class="keyword">if</span> edge &lt; <span class="keyword">-8%</span> → <span style="color:#f87171">▼ UNDER</span><br>
+      <span class="keyword">if</span> |edge| &lt; <span class="keyword">8%</span> → <span style="color:#64748b">— HOLD</span><br><br>
+      <span class="comment">// Confidence = consistency score ± edge bonus</span><br>
+      <span class="fn">HIGH</span> = |edge| ≥ 15% + consistency ≥ 75 → <span style="color:#fbbf24">🔥</span><br>
+      <span class="fn">MEDIUM</span> = |edge| ≥ 8% or consistency ≥ 50<br>
+      <span class="fn">LOW</span> = below thresholds
+    </div>
+    <p style="color:var(--text-dim);font-size:13px;line-height:1.7;">
+      The model prioritizes recent performance (last 5 games = 45% weight) while anchoring to medium and long-term averages. Trend adjustment captures momentum — a player on a hot streak gets a slight boost. Consistency score measures variance: a player who scores 20 every night is more predictable than one who alternates between 10 and 30. The 8% edge threshold filters out marginal plays, only surfacing picks where our model significantly disagrees with the market.
+    </p>
+  </div>
+
+  <!-- Technical Details -->
+  <div class="flow-section">
+    <h2 class="section-title">Technical Details</h2>
+    <div class="details-grid">
+      <div class="detail-card">
+        <h3><span class="icon" style="background:var(--blue-dim)">📋</span> DynamoDB Design</h3>
+        <ul class="detail-list">
+          <li><span class="label">Pattern</span> Single-table design with entity_type attribute</li>
+          <li><span class="label">PK/SK</span> Composite keys: PLAYER#id / GAME#id#date</li>
+          <li><span class="label">GSI</span> GSI1 for date-based queries (DATE#date → PLAYER#id)</li>
+          <li><span class="label">TTL</span> 30-day auto-expiry on predictions</li>
+          <li><span class="label">Billing</span> On-demand (pay per request, no provisioned capacity)</li>
+        </ul>
+      </div>
+      <div class="detail-card">
+        <h3><span class="icon" style="background:var(--green-dim)">🔒</span> Security</h3>
+        <ul class="detail-list">
+          <li><span class="label">API</span> Read-only GET endpoints, no authentication required</li>
+          <li><span class="label">IAM</span> Least-privilege roles per Lambda (SAM-generated)</li>
+          <li><span class="label">S3</span> Raw data bucket fully locked (all public access blocked)</li>
+          <li><span class="label">Keys</span> API keys stored in Lambda environment variables</li>
+          <li><span class="label">Data</span> No PII or user data stored anywhere</li>
+        </ul>
+      </div>
+      <div class="detail-card">
+        <h3><span class="icon" style="background:var(--orange-dim)">🏗️</span> Infrastructure as Code</h3>
+        <ul class="detail-list">
+          <li><span class="label">IaC</span> AWS SAM (template.yaml) → CloudFormation</li>
+          <li><span class="label">CI/CD</span> GitHub Actions with OIDC role assumption</li>
+          <li><span class="label">Deploy</span> PowerShell + Bash scripts for Windows/Mac</li>
+          <li><span class="label">Regions</span> us-east-1 (configurable)</li>
+          <li><span class="label">Stages</span> Parameterized: dev / prod</li>
+        </ul>
+      </div>
+      <div class="detail-card">
+        <h3><span class="icon" style="background:var(--purple-dim)">📊</span> Data Sources</h3>
+        <ul class="detail-list">
+          <li><span class="label">Stats</span> balldontlie API — player box scores, game data</li>
+          <li><span class="label">Lines</span> The Odds API — live player prop lines from sportsbooks</li>
+          <li><span class="label">Props</span> Points, rebounds, assists, 3-pointers, PRA combo</li>
+          <li><span class="label">History</span> 7-day rolling window, 20-game lookback</li>
+          <li><span class="label">Games</span> ~12-15 games/day during NBA season</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cost -->
+  <div class="cost-banner">
+    <h3>💰 AWS Free Tier Optimized</h3>
+    <p>Entire platform runs within AWS Free Tier limits</p>
+    <div class="cost-items">
+      <div class="cost-item">
+        <div class="amount">$0</div>
+        <div class="label">Monthly Cost</div>
+      </div>
+      <div class="cost-item">
+        <div class="amount">~6</div>
+        <div class="label">Lambda Invocations/Day</div>
+      </div>
+      <div class="cost-item">
+        <div class="amount">90d</div>
+        <div class="label">S3 Auto-Cleanup</div>
+      </div>
+      <div class="cost-item">
+        <div class="amount">30d</div>
+        <div class="label">Prediction TTL</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

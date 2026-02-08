@@ -1,0 +1,275 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  NBA Betting Predictor - Serverless sports analytics engine
+  Analyzes player/team stats to predict over/under outcomes
+
+Globals:
+  Function:
+    Timeout: 60
+    Runtime: python3.11
+    MemorySize: 256
+    Environment:
+      Variables:
+        STATS_TABLE: !Ref StatsTable
+        PREDICTIONS_TABLE: !Ref PredictionsTable
+        RESULTS_TABLE: !Ref ResultsTable
+        RAW_DATA_BUCKET: !Ref RawDataBucket
+        ODDS_API_KEY: !Ref OddsApiKey
+
+Parameters:
+  OddsApiKey:
+    Type: String
+    Default: ""
+    Description: API key for The Odds API (optional, for live odds)
+  Stage:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, prod]
+
+Resources:
+  # ============================================
+  # S3 BUCKETS
+  # ============================================
+  RawDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "nba-predictor-raw-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "nba-predictor-frontend-${AWS::AccountId}"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+
+  # ============================================
+  # DYNAMODB TABLES
+  # ============================================
+  StatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "nba-predictor-stats-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: gsi1pk
+          AttributeType: S
+        - AttributeName: gsi1sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: gsi1pk
+              KeyType: HASH
+            - AttributeName: gsi1sk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  PredictionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "nba-predictor-predictions-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  ResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "nba-predictor-results-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  # ============================================
+  # LAMBDA FUNCTIONS
+  # ============================================
+  FetchDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/fetch_data/
+      Handler: handler.lambda_handler
+      Timeout: 120
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StatsTable
+        - S3CrudPolicy:
+            BucketName: !Ref RawDataBucket
+      Events:
+        DailyFetch:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 10 * * ? *)
+            Description: Fetch NBA stats daily at 10 AM UTC
+
+  ProcessStatsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/process_stats/
+      Handler: handler.lambda_handler
+      Timeout: 120
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StatsTable
+        - S3ReadPolicy:
+            BucketName: !Ref RawDataBucket
+        - Statement:
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !Sub "arn:aws:s3:::nba-predictor-raw-${AWS::AccountId}"
+      Events:
+        ProcessSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 11 * * ? *)
+            Description: Process stats daily at 11 AM UTC (1hr after fetch)
+
+  PredictFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/predict/
+      Handler: handler.lambda_handler
+      Timeout: 120
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StatsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PredictionsTable
+      Events:
+        DailyPredict:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 12 * * ? *)
+            Description: Generate predictions daily at 12 PM UTC
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/api/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PredictionsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref StatsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ResultsTable
+      Events:
+        GetPredictions:
+          Type: Api
+          Properties:
+            Path: /predictions
+            Method: get
+            RestApiId: !Ref PredictorApi
+        GetPredictionsByDate:
+          Type: Api
+          Properties:
+            Path: /predictions/{date}
+            Method: get
+            RestApiId: !Ref PredictorApi
+        GetPlayerStats:
+          Type: Api
+          Properties:
+            Path: /players/{playerId}/stats
+            Method: get
+            RestApiId: !Ref PredictorApi
+        GetAccuracy:
+          Type: Api
+          Properties:
+            Path: /accuracy
+            Method: get
+            RestApiId: !Ref PredictorApi
+        GetTeams:
+          Type: Api
+          Properties:
+            Path: /teams
+            Method: get
+            RestApiId: !Ref PredictorApi
+
+  # ============================================
+  # API GATEWAY
+  # ============================================
+  PredictorApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'GET,OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"
+
+  # ============================================
+  # SNS TOPIC (for alerts)
+  # ============================================
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "nba-predictor-alerts-${Stage}"
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${PredictorApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
+  FrontendUrl:
+    Description: Frontend website URL
+    Value: !GetAtt FrontendBucket.WebsiteURL
+  RawDataBucketName:
+    Description: S3 bucket for raw data
+    Value: !Ref RawDataBucket
+  FrontendBucketName:
+    Description: S3 bucket for frontend
+    Value: !Ref FrontendBucket

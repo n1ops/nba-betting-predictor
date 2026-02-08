@@ -1,0 +1,47 @@
+name: Deploy NBA Predictor
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # Build & deploy backend
+      - run: sam build
+      - run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
+
+      # Deploy frontend
+      - name: Deploy Frontend
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name nba-predictor \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
+            --output text)
+          aws s3 sync frontend/ "s3://$BUCKET" --delete
+
+      - name: Print Outputs
+        run: |
+          echo "🏀 Deployment complete!"
+          sam list stack-outputs --stack-name nba-predictor --output table

@@ -29,3 +29,17 @@ dist/
 
 # Deployment zips
 *.zip
+
+# Lambda test artifacts
+response.json
+payload.json
+backfill.json
+
+# S3 policies
+s3policy.json
+
+# sklearn Lambda layer (built artifact)
+sklearn-layer/
+
+# Deployment zips
+*.zip

@@ -274,7 +274,7 @@ All endpoints are read-only, rate-limited (5 req/sec), and input-validated.
 
 ## Security
 
-See [SECURITY.md](SECURITY.md) for the full audit. Highlights:
+Highlights:
 
 - **Read-only API** — No public endpoint can modify data
 - **Rate limiting** — API Gateway throttled at 5 req/sec, burst 10
@@ -336,7 +336,3 @@ python tests/test_predictions.py
 - **Infrastructure as Code** — SAM templates, CloudFormation, automated deployments
 
 ---
-
-## License
-
-MIT
